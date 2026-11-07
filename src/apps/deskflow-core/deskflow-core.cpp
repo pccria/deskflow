@@ -16,6 +16,7 @@
 #include "deskflow/ClientApp.h"
 #include "deskflow/ServerApp.h"
 #include "deskflow/ipc/CoreIpcServer.h"
+#include "server/Server.h"
 
 #if defined(Q_OS_WIN)
 #include "arch/win32/ArchMiscWindows.h"
@@ -126,10 +127,39 @@ int main(int argc, char **argv)
       ipcServer, &deskflow::core::ipc::IpcServer::stopProcessRequested, coreApp, &App::quit, Qt::DirectConnection
   );
   QObject::connect(
-      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchToScreenRequested, coreApp, &App::switchToScreen
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchToScreenRequested,
+      [&events](const QString &screenName) {
+        LOG_INFO("IPC requesting switch to screen: %s", screenName.toUtf8().constData());
+        auto *info = new Server::SwitchToComputerInfo(screenName.toStdString());
+        events.addEvent(Event(
+            EventTypes::ServerSwitchToComputer,
+            events.getSystemTarget(),
+            info,
+            Event::EventFlags::DeliverImmediately
+        ));
+      }
   );
   QObject::connect(
-      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchInDirectionRequested, coreApp, &App::switchInDirection
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchInDirectionRequested,
+      [&events](const QString &direction) {
+        LOG_INFO("IPC requesting switch in direction: %s", direction.toUtf8().constData());
+        Direction dir = Direction::NoDirection;
+        const auto dirLower = direction.toLower();
+        if (dirLower == QStringLiteral("left")) dir = Direction::Left;
+        else if (dirLower == QStringLiteral("right")) dir = Direction::Right;
+        else if (dirLower == QStringLiteral("up") || dirLower == QStringLiteral("top")) dir = Direction::Top;
+        else if (dirLower == QStringLiteral("down") || dirLower == QStringLiteral("bottom")) dir = Direction::Bottom;
+
+        if (dir != Direction::NoDirection) {
+          auto *info = new Server::SwitchInDirectionInfo(dir);
+          events.addEvent(Event(
+              EventTypes::ServerSwitchInDirection,
+              events.getSystemTarget(),
+              info,
+              Event::EventFlags::DeliverImmediately
+          ));
+        }
+      }
   );
   ipcServer->listen();
 

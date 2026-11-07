@@ -101,7 +101,13 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Com
   m_events->addHandler(EventTypes::ServerSwitchToComputer, m_inputFilter, [this](const auto &e) {
     handleSwitchToComputerEvent(e);
   });
+  m_events->addHandler(EventTypes::ServerSwitchToComputer, m_events->getSystemTarget(), [this](const auto &e) {
+    handleSwitchToComputerEvent(e);
+  });
   m_events->addHandler(EventTypes::ServerSwitchInDirection, m_inputFilter, [this](const auto &e) {
+    handleSwitchInDirectionEvent(e);
+  });
+  m_events->addHandler(EventTypes::ServerSwitchInDirection, m_events->getSystemTarget(), [this](const auto &e) {
     handleSwitchInDirectionEvent(e);
   });
   m_events->addHandler(EventTypes::ServerToggleComputer, m_inputFilter, [this](const auto &e) {
