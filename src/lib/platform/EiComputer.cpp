@@ -310,6 +310,16 @@ bool EiComputer::isAnyMouseButtonDown(uint32_t &buttonID) const
 
 void EiComputer::getCursorCenter(int32_t &x, int32_t &y) const
 {
+  if (m_portalInputCapture && !m_portalInputCapture->getZones().empty()) {
+    const auto *targetZone = m_portalInputCapture->findZoneAdjacentToSide(PortalInputCapture::BarrierSide::Right);
+    if (!targetZone) {
+      targetZone = &m_portalInputCapture->getZones().front();
+    }
+    x = targetZone->centerX();
+    y = targetZone->centerY();
+    return;
+  }
+
   x = m_x + m_w / 2;
   y = m_y + m_h / 2;
 }
@@ -599,6 +609,29 @@ void EiComputer::updateShape()
   m_w = newW;
   m_h = newH;
 
+  if (changed) {
+    sendEvent(EventTypes::ComputerShapeChanged, nullptr);
+  }
+}
+
+void EiComputer::setShapeFromZones(int32_t x, int32_t y, int32_t w, int32_t h)
+{
+  if (w <= 0 || h <= 0) {
+    return;
+  }
+  const bool changed = (x != m_x || y != m_y || w != m_w || h != m_h);
+  m_x = x;
+  m_y = y;
+  m_w = w;
+  m_h = h;
+  if (!m_isShapeInitialized || (m_cursorX == 0 && m_cursorY == 0)) {
+    getCursorCenter(m_cursorX, m_cursorY);
+    m_isShapeInitialized = true;
+  }
+  LOG_INFO(
+      "EiComputer updated shape from portal zones: %dx%d@%d,%d, center=(%d,%d)",
+      m_w, m_h, m_x, m_y, m_cursorX, m_cursorY
+  );
   if (changed) {
     sendEvent(EventTypes::ComputerShapeChanged, nullptr);
   }

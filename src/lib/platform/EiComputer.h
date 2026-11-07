@@ -65,6 +65,7 @@ public:
   std::int32_t getJumpZoneSize() const override;
   bool isAnyMouseButtonDown(std::uint32_t &buttonID) const override;
   void getCursorCenter(std::int32_t &x, std::int32_t &y) const override;
+  void setShapeFromZones(std::int32_t x, std::int32_t y, std::int32_t w, std::int32_t h);
 
   // ISecondaryComputer overrides
   void fakeMouseButton(ButtonID id, bool press) override;

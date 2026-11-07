@@ -43,6 +43,35 @@ public:
     return m_isActive;
   }
 
+  enum class BarrierSide : uint8_t
+  {
+    Left,
+    Right,
+    Top,
+    Bottom
+  };
+
+  struct MonitorZone
+  {
+    gint x = 0;
+    gint y = 0;
+    guint width = 0;
+    guint height = 0;
+
+    gint right() const { return x + static_cast<gint>(width); }
+    gint bottom() const { return y + static_cast<gint>(height); }
+    gint centerX() const { return x + static_cast<gint>(width) / 2; }
+    gint centerY() const { return y + static_cast<gint>(height) / 2; }
+    bool contains(int32_t px, int32_t py) const {
+      return px >= x && px < right() && py >= y && py < bottom();
+    }
+  };
+
+  const std::vector<MonitorZone> &getZones() const { return m_zones; }
+  const MonitorZone *findZoneContaining(int32_t x, int32_t y) const;
+  const MonitorZone *findClosestZone(int32_t x, int32_t y) const;
+  const MonitorZone *findZoneAdjacentToSide(BarrierSide side) const;
+
 private:
   void glibThread(const void *);
   gboolean timeoutHandler() const;
@@ -105,14 +134,6 @@ private:
     SelectionTransfer,
   };
 
-  enum class BarrierSide : uint8_t
-  {
-    Left,
-    Right,
-    Top,
-    Bottom
-  };
-
   struct BarrierInfo
   {
     guint id = 0;
@@ -170,6 +191,7 @@ private:
 
   std::vector<XdpInputCapturePointerBarrier *> m_barriers;
   std::vector<BarrierInfo> m_barrierInfo;
+  std::vector<MonitorZone> m_zones;
 
   EiClipboard *m_clipboard = nullptr;
 };

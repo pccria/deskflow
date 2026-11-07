@@ -534,11 +534,9 @@ void Server::jumpToComputer(BaseClientProxy *newComputer)
     if (sw <= 0) sw = 1920;
     if (sh <= 0) sh = 1080;
     // If returning to primary computer and cursor position is uninitialized or sitting
-    // right on a screen barrier seam (e.g. 1920 on dual screen, or within edge margins),
-    // restore to the comfortable center of the primary display (e.g. 960, 540)
-    if (x <= sx || x >= (sx + sw - 50) || (sw >= 3840 && std::abs(x - (sx + sw / 2)) < 50)) {
-      x = (sw >= 3840) ? (sx + sw / 4) : (sx + sw / 2);
-      y = sy + sh / 2;
+    // right on an outer edge barrier, request the computer's detected monitor center:
+    if (x <= sx || x >= (sx + sw - 50) || (x == 0 && y == 0)) {
+      m_primaryClient->getCursorCenter(x, y);
     }
   }
 

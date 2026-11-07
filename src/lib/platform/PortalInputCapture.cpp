@@ -466,6 +466,83 @@ PortalInputCapture::mapPortalActivationToComputerPosition(guint barrierId, doubl
   return {x, y};
 }
 
+const PortalInputCapture::MonitorZone *PortalInputCapture::findZoneContaining(int32_t x, int32_t y) const
+{
+  for (const auto &zone : m_zones) {
+    if (zone.contains(x, y)) {
+      return &zone;
+    }
+  }
+  return nullptr;
+}
+
+const PortalInputCapture::MonitorZone *PortalInputCapture::findClosestZone(int32_t x, int32_t y) const
+{
+  if (m_zones.empty()) return nullptr;
+  const MonitorZone *bestZone = &m_zones.front();
+  double bestDist = std::numeric_limits<double>::max();
+  for (const auto &zone : m_zones) {
+    double dx = x - zone.centerX();
+    double dy = y - zone.centerY();
+    double dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestZone = &zone;
+    }
+  }
+  return bestZone;
+}
+
+const PortalInputCapture::MonitorZone *PortalInputCapture::findZoneAdjacentToSide(BarrierSide side) const
+{
+  if (m_zones.empty()) return nullptr;
+  const MonitorZone *bestZone = &m_zones.front();
+  using enum BarrierSide;
+  switch (side) {
+  case Right: {
+    gint maxRight = std::numeric_limits<gint>::min();
+    for (const auto &zone : m_zones) {
+      if (zone.right() > maxRight) {
+        maxRight = zone.right();
+        bestZone = &zone;
+      }
+    }
+    break;
+  }
+  case Left: {
+    gint minLeft = std::numeric_limits<gint>::max();
+    for (const auto &zone : m_zones) {
+      if (zone.x < minLeft) {
+        minLeft = zone.x;
+        bestZone = &zone;
+      }
+    }
+    break;
+  }
+  case Top: {
+    gint minTop = std::numeric_limits<gint>::max();
+    for (const auto &zone : m_zones) {
+      if (zone.y < minTop) {
+        minTop = zone.y;
+        bestZone = &zone;
+      }
+    }
+    break;
+  }
+  case Bottom: {
+    gint maxBottom = std::numeric_limits<gint>::min();
+    for (const auto &zone : m_zones) {
+      if (zone.bottom() > maxBottom) {
+        maxBottom = zone.bottom();
+        bestZone = &zone;
+      }
+    }
+    break;
+  }
+  }
+  return bestZone;
+}
+
 std::pair<double, double> PortalInputCapture::mapPortalReleasePosition(double x, double y) const
 {
   std::int32_t computerX;
@@ -487,6 +564,25 @@ std::pair<double, double> PortalInputCapture::mapPortalReleasePosition(double x,
   auto mappedX = static_cast<std::int32_t>(std::lround(x));
   auto mappedY = static_cast<std::int32_t>(std::lround(y));
 
+  // Multi-monitor zone validation:
+  // Check if (mappedX, mappedY) falls inside any detected physical monitor.
+  const MonitorZone *targetZone = findZoneContaining(mappedX, mappedY);
+  if (!targetZone) {
+    // If coordinate is in the void or uninitialized, map to monitor adjacent to the right neighbor, or closest monitor
+    targetZone = findZoneAdjacentToSide(BarrierSide::Right);
+    if (!targetZone) {
+      targetZone = findClosestZone(mappedX, mappedY);
+    }
+    if (targetZone) {
+      mappedX = targetZone->centerX();
+      mappedY = targetZone->centerY();
+      LOG_DEBUG(
+          "remapped coordinate from void/edge to monitor (%d,%d %ux%u) center: %d,%d",
+          targetZone->x, targetZone->y, targetZone->width, targetZone->height, mappedX, mappedY
+      );
+    }
+  }
+
   if (BarrierInfo releaseBarrier; getClosestReleaseBarrier(
           x, y, computerLeft, computerTop, computerRight, computerBottom, portalBounds, releaseBarrier
       )) {
@@ -495,9 +591,6 @@ std::pair<double, double> PortalInputCapture::mapPortalReleasePosition(double x,
         releaseBarrier.y + static_cast<gint>(releaseBarrier.height) - 1
     };
 
-    // Only force barrier edge offset if the requested coordinates are actually close
-    // to the barrier (e.g. edge-sliding crossover). For jumps and center restores,
-    // preserve the actual target coordinate so the cursor is not stuck at the edge.
     bool isNearBarrier = false;
     using enum BarrierSide;
     const auto threshold = (jumpZoneSize > 0) ? (jumpZoneSize * 4) : 50;
@@ -535,10 +628,17 @@ std::pair<double, double> PortalInputCapture::mapPortalReleasePosition(double x,
         mappedY = std::max(releaseBounds.bottom - jumpZoneSize, releaseBounds.top);
         break;
       }
-    } else {
-      mappedX = std::clamp(mappedX, computerLeft, computerRight);
-      mappedY = std::clamp(mappedY, computerTop, computerBottom);
     }
+  }
+
+  // Ensure coordinates stay safely within the boundaries of the target physical monitor
+  if (targetZone) {
+    const auto margin = (jumpZoneSize > 0) ? (jumpZoneSize + 10) : 25;
+    mappedX = std::clamp(mappedX, targetZone->x + margin, targetZone->right() - margin);
+    mappedY = std::clamp(mappedY, targetZone->y + margin, targetZone->bottom() - margin);
+  } else {
+    mappedX = std::clamp(mappedX, computerLeft, computerRight);
+    mappedY = std::clamp(mappedY, computerTop, computerBottom);
   }
 
   return {mappedX, mappedY};
@@ -823,12 +923,14 @@ void PortalInputCapture::handleZonesChanged(XdpInputCaptureSession *session, con
   gint unionRight = 0;
   gint unionBottom = 0;
   bool boundsInit = false;
+  m_zones.clear();
   for (auto z = zones; z != nullptr; z = z->next) {
     guint w;
     guint h;
     gint x;
     gint y;
     g_object_get(z->data, "width", &w, "height", &h, "x", &x, "y", &y, nullptr);
+    m_zones.push_back({x, y, w, h});
     const gint right = x + static_cast<gint>(w);
     const gint bottom = y + static_cast<gint>(h);
     if (!boundsInit) {
@@ -847,6 +949,10 @@ void PortalInputCapture::handleZonesChanged(XdpInputCaptureSession *session, con
 
   // Second pass: only add a barrier for a zone edge that is part of the outer
   // boundary of the union (i.e. not an internal seam between two monitors).
+  if (boundsInit) {
+    m_computer->setShapeFromZones(unionLeft, unionTop, unionRight - unionLeft, unionBottom - unionTop);
+  }
+
   guint id = 0;
   while (zones != nullptr) {
     guint w;
