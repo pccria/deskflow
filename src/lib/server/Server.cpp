@@ -521,6 +521,14 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
     // enter new computer
     m_active->enter(x, y, m_seqNum, m_primaryClient->getToggleMask(), forScreensaver);
 
+    // Focus activation: deliver a micro-motion pulse so the target client's window manager
+    // immediately activates hover and focus-follows-mouse on the node under cursor
+    if (m_active != m_primaryClient) {
+      int32_t nudgeX = (x > dx + 2) ? (x - 2) : (x + 2);
+      m_active->mouseMove(nudgeX, y);
+      m_active->mouseMove(x, y);
+    }
+
     if (m_enableClipboard) {
       // send the clipboard data to new active computer
       for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
