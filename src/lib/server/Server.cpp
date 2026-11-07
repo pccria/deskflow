@@ -440,6 +440,26 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
     );
   }
 
+  // If switching computer and target coordinates are clamped right at the edge barrier
+  // (e.g. from crossing a barrier or an uninitialized position), deflect inwards to
+  // the saved working position or computer center:
+  if (m_active != dst) {
+    if (x <= dx + 10 || x >= dx + dw - 50 || (x == 0 && y == 0)) {
+      int32_t jx = 0;
+      int32_t jy = 0;
+      dst->getJumpCursorPos(jx, jy);
+      if (jx > dx + 50 && jx < dx + dw - 50 && jy > dy + 20 && jy < dy + dh - 20) {
+        x = jx;
+        y = jy;
+      } else if (dst == m_primaryClient) {
+        m_primaryClient->getCursorCenter(x, y);
+      } else {
+        x = dx + (dw / 2);
+        y = dy + (dh / 2);
+      }
+    }
+  }
+
   assert(m_active != nullptr);
 
   LOG_INFO("switch from \"%s\" to \"%s\" at %d,%d", getName(m_active).c_str(), getName(dst).c_str(), x, y);
