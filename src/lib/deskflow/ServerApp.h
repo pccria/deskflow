@@ -91,6 +91,10 @@ public:
     return m_server;
   }
 
+public Q_SLOTS:
+  void switchToScreen(const QString &name) override;
+  void switchInDirection(const QString &direction) override;
+
   //
   // Static functions
   //

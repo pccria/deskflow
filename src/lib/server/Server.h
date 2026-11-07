@@ -200,6 +200,12 @@ public:
   void sendConnectedClientsIpc() const;
   size_t getMaximumClipboardSizeBytes() const;
 
+  //! Switch to a specific computer/screen by name
+  void switchToComputer(const std::string &name);
+
+  //! Switch to computer in a specific direction
+  void switchInDirection(Direction direction);
+
   //@}
 
 private:

@@ -119,6 +119,16 @@ public:
     return m_exitCode;
   }
 
+public Q_SLOTS:
+  virtual void switchToScreen(const QString &name)
+  {
+    Q_UNUSED(name);
+  }
+  virtual void switchInDirection(const QString &direction)
+  {
+    Q_UNUSED(direction);
+  }
+
 protected:
   void runEventsLoop(const void *);
 

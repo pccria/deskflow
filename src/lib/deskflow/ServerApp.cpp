@@ -605,3 +605,35 @@ void ServerApp::startNode()
     bye(s_exitFailed);
   }
 }
+
+void ServerApp::switchToScreen(const QString &name)
+{
+  if (m_server != nullptr) {
+    LOG_INFO("switching to screen: %s", name.toUtf8().constData());
+    m_server->switchToComputer(name.toStdString());
+  }
+}
+
+void ServerApp::switchInDirection(const QString &direction)
+{
+  if (m_server != nullptr) {
+    const auto dirLower = direction.toLower();
+    Direction dir = Direction::NoDirection;
+    if (dirLower == QStringLiteral("left")) {
+      dir = Direction::Left;
+    } else if (dirLower == QStringLiteral("right")) {
+      dir = Direction::Right;
+    } else if (dirLower == QStringLiteral("up") || dirLower == QStringLiteral("top")) {
+      dir = Direction::Top;
+    } else if (dirLower == QStringLiteral("down") || dirLower == QStringLiteral("bottom")) {
+      dir = Direction::Bottom;
+    }
+
+    if (dir != Direction::NoDirection) {
+      LOG_INFO("switching in direction: %s", direction.toUtf8().constData());
+      m_server->switchInDirection(dir);
+    } else {
+      LOG_WARN("unknown switch direction: %s", direction.toUtf8().constData());
+    }
+  }
+}

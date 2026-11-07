@@ -24,6 +24,10 @@ public:
 
   static CoreIpcServer &instance();
 
+Q_SIGNALS:
+  void switchToScreenRequested(const QString &screenName);
+  void switchInDirectionRequested(const QString &direction);
+
 private:
   void processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts) override;
 };

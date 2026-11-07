@@ -1310,31 +1310,38 @@ void Server::handleClientCloseTimeout(BaseClientProxy *client)
   delete client;
 }
 
-void Server::handleSwitchToComputerEvent(const Event &event)
+void Server::switchToComputer(const std::string &name)
 {
-  const auto *info = static_cast<SwitchToComputerInfo *>(event.getData());
-
-  ClientList::const_iterator index = m_clients.find(info->m_computer);
+  ClientList::const_iterator index = m_clients.find(name);
   if (index == m_clients.end()) {
-    LOG_VERBOSE("computer \"%s\" not active", info->m_computer.c_str());
+    LOG_VERBOSE("computer \"%s\" not active", name.c_str());
   } else {
     jumpToComputer(index->second);
   }
 }
 
-void Server::handleSwitchInDirectionEvent(const Event &event)
+void Server::switchInDirection(Direction direction)
 {
-  const auto *info = static_cast<SwitchInDirectionInfo *>(event.getData());
-
-  // jump to computer in chosen direction from center of this computer
   int32_t x = m_x;
   int32_t y = m_y;
-  BaseClientProxy *newComputer = getNeighbor(m_active, info->m_direction, x, y);
+  BaseClientProxy *newComputer = getNeighbor(m_active, direction, x, y);
   if (newComputer == nullptr) {
-    LOG_VERBOSE("no neighbor %s", Config::dirName(info->m_direction));
+    LOG_VERBOSE("no neighbor %s", Config::dirName(direction));
   } else {
     jumpToComputer(newComputer);
   }
+}
+
+void Server::handleSwitchToComputerEvent(const Event &event)
+{
+  const auto *info = static_cast<SwitchToComputerInfo *>(event.getData());
+  switchToComputer(info->m_computer);
+}
+
+void Server::handleSwitchInDirectionEvent(const Event &event)
+{
+  const auto *info = static_cast<SwitchInDirectionInfo *>(event.getData());
+  switchInDirection(info->m_direction);
 }
 
 void Server::handleToggleComputerEvent(const Event &)

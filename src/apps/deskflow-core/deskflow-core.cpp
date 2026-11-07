@@ -125,6 +125,12 @@ int main(int argc, char **argv)
   QObject::connect(
       ipcServer, &deskflow::core::ipc::IpcServer::stopProcessRequested, coreApp, &App::quit, Qt::DirectConnection
   );
+  QObject::connect(
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchToScreenRequested, coreApp, &App::switchToScreen
+  );
+  QObject::connect(
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::switchInDirectionRequested, coreApp, &App::switchInDirection
+  );
   ipcServer->listen();
 
   QThread coreThread;
