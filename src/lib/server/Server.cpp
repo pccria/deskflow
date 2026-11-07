@@ -1352,10 +1352,13 @@ void Server::switchToComputer(const std::string &target)
   if (index == m_clients.end()) {
     LOG_VERBOSE("computer \"%s\" not active", name.c_str());
   } else {
+    BaseClientProxy *targetComputer = index->second;
     if (customX >= 0 && customY >= 0) {
-      index->second->setJumpCursorPos(customX, customY);
+      targetComputer->setJumpCursorPos(customX, customY);
+      switchComputer(targetComputer, customX, customY, false);
+    } else {
+      jumpToComputer(targetComputer);
     }
-    jumpToComputer(index->second);
   }
 }
 
