@@ -106,7 +106,7 @@ public Q_SLOTS:
   }
 
 private:
-  void handleComputerSwitched() const;
+  void handleComputerSwitched(const Event &event) const;
   std::unique_ptr<ISocketFactory> getSocketFactory() const;
   NetworkAddress getAddress(const NetworkAddress &address) const;
 

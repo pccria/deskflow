@@ -19,6 +19,7 @@
 #include "deskflow/DisplayException.h"
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ipc/CoreIpc.h"
+#include "deskflow/ipc/CoreIpcServer.h"
 #include "net/SocketException.h"
 #include "net/SocketMultiplexer.h"
 #include "net/TCPSocketFactory.h"
@@ -465,8 +466,8 @@ Server *ServerApp::openServer(ServerConfig &config, PrimaryClient *primaryClient
 {
   auto *server = new Server(config, primaryClient, m_serverComputer, getEvents());
   try {
-    getEvents()->addHandler(EventTypes::ServerComputerSwitched, server, [this](const auto &) {
-      handleComputerSwitched();
+    getEvents()->addHandler(EventTypes::ServerComputerSwitched, server, [this](const auto &e) {
+      handleComputerSwitched(e);
     });
 
   } catch (std::bad_alloc &ba) {
@@ -477,9 +478,15 @@ Server *ServerApp::openServer(ServerConfig &config, PrimaryClient *primaryClient
   return server;
 }
 
-void ServerApp::handleComputerSwitched() const
+void ServerApp::handleComputerSwitched(const Event &event) const
 {
-  // do nothing
+  const auto *info = static_cast<Server::SwitchToComputerInfo *>(event.getData());
+  if (info) {
+    LOG_INFO("computer switched to \"%s\"", info->m_computer.c_str());
+    deskflow::core::ipc::CoreIpcServer::instance().broadcastCommand(
+        QStringLiteral("screenSwitched"), QString::fromStdString(info->m_computer)
+    );
+  }
 }
 
 std::unique_ptr<ISocketFactory> ServerApp::getSocketFactory() const
