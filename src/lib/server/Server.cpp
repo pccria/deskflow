@@ -444,11 +444,11 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
   // (e.g. from crossing a barrier or an uninitialized position), deflect inwards to
   // the saved working position or computer center:
   if (m_active != dst) {
-    if (x <= dx + 10 || x >= dx + dw - 50 || (x == 0 && y == 0)) {
+    if (x <= dx + 100 || x >= dx + dw - 100 || y <= dy + 20 || y >= dy + dh - 20 || (x == 0 && y == 0)) {
       int32_t jx = 0;
       int32_t jy = 0;
       dst->getJumpCursorPos(jx, jy);
-      if (jx > dx + 50 && jx < dx + dw - 50 && jy > dy + 20 && jy < dy + dh - 20) {
+      if (jx > dx + 100 && jx < dx + dw - 100 && jy > dy + 20 && jy < dy + dh - 20) {
         x = jx;
         y = jy;
       } else if (dst == m_primaryClient) {
@@ -459,6 +459,9 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
       }
     }
   }
+
+  x = std::clamp(x, dx, dx + dw - 1);
+  y = std::clamp(y, dy, dy + dh - 1);
 
   assert(m_active != nullptr);
 
@@ -540,6 +543,10 @@ void Server::jumpToComputer(BaseClientProxy *newComputer)
 {
   assert(newComputer != nullptr);
 
+  if (newComputer == m_active) {
+    return;
+  }
+
   // record the current cursor position on the active computer
   m_active->setJumpCursorPos(m_x, m_y);
 
@@ -548,15 +555,18 @@ void Server::jumpToComputer(BaseClientProxy *newComputer)
   int32_t y;
   newComputer->getJumpCursorPos(x, y);
 
-  if (newComputer == m_primaryClient) {
-    int32_t sx, sy, sw, sh;
-    newComputer->getShape(sx, sy, sw, sh);
-    if (sw <= 0) sw = 1920;
-    if (sh <= 0) sh = 1080;
-    // If returning to primary computer and cursor position is uninitialized or sitting
-    // right on an outer edge barrier, request the computer's detected monitor center:
-    if (x <= sx || x >= (sx + sw - 50) || (x == 0 && y == 0)) {
+  int32_t sx, sy, sw, sh;
+  newComputer->getShape(sx, sy, sw, sh);
+  if (sw <= 0) sw = 1920;
+  if (sh <= 0) sh = 1080;
+  // If returning to computer and cursor position is uninitialized or sitting
+  // right on an outer edge barrier, request the computer's center:
+  if (x <= sx + 100 || x >= (sx + sw - 100) || y <= sy + 20 || y >= (sy + sh - 20) || (x == 0 && y == 0)) {
+    if (newComputer == m_primaryClient) {
       m_primaryClient->getCursorCenter(x, y);
+    } else {
+      x = sx + (sw / 2);
+      y = sy + (sh / 2);
     }
   }
 
@@ -1373,6 +1383,10 @@ void Server::switchToComputer(const std::string &target)
     LOG_VERBOSE("computer \"%s\" not active", name.c_str());
   } else {
     BaseClientProxy *targetComputer = index->second;
+    if (targetComputer == m_active && customX < 0) {
+      LOG_VERBOSE("already active on computer \"%s\", ignoring redundant jump", name.c_str());
+      return;
+    }
     if (customX >= 0 && customY >= 0) {
       targetComputer->setJumpCursorPos(customX, customY);
       switchComputer(targetComputer, customX, customY, false);
