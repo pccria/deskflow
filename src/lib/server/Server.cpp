@@ -528,6 +528,20 @@ void Server::jumpToComputer(BaseClientProxy *newComputer)
   int32_t y;
   newComputer->getJumpCursorPos(x, y);
 
+  if (newComputer == m_primaryClient) {
+    int32_t sx, sy, sw, sh;
+    newComputer->getShape(sx, sy, sw, sh);
+    if (sw <= 0) sw = 1920;
+    if (sh <= 0) sh = 1080;
+    // If returning to primary computer and cursor position is uninitialized or sitting
+    // right on a screen barrier seam (e.g. 1920 on dual screen, or within edge margins),
+    // restore to the comfortable center of the primary display (e.g. 960, 540)
+    if (x <= sx || x >= (sx + sw - 50) || (sw >= 3840 && std::abs(x - (sx + sw / 2)) < 50)) {
+      x = (sw >= 3840) ? (sx + sw / 4) : (sx + sw / 2);
+      y = sy + sh / 2;
+    }
+  }
+
   switchComputer(newComputer, x, y, false);
 }
 
@@ -1316,12 +1330,33 @@ void Server::handleClientCloseTimeout(BaseClientProxy *client)
   delete client;
 }
 
-void Server::switchToComputer(const std::string &name)
+void Server::switchToComputer(const std::string &target)
 {
+  std::string name = target;
+  int32_t customX = -1;
+  int32_t customY = -1;
+  auto colonPos = target.find(':');
+  if (colonPos != std::string::npos) {
+    name = target.substr(0, colonPos);
+    auto commaPos = target.find(',', colonPos);
+    if (commaPos != std::string::npos) {
+      try {
+        customX = std::stoi(target.substr(colonPos + 1, commaPos - colonPos - 1));
+        customY = std::stoi(target.substr(commaPos + 1));
+      } catch (...) {
+        customX = -1;
+        customY = -1;
+      }
+    }
+  }
+
   ClientList::const_iterator index = m_clients.find(name);
   if (index == m_clients.end()) {
     LOG_VERBOSE("computer \"%s\" not active", name.c_str());
   } else {
+    if (customX >= 0 && customY >= 0) {
+      index->second->setJumpCursorPos(customX, customY);
+    }
     jumpToComputer(index->second);
   }
 }

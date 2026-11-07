@@ -495,24 +495,49 @@ std::pair<double, double> PortalInputCapture::mapPortalReleasePosition(double x,
         releaseBarrier.y + static_cast<gint>(releaseBarrier.height) - 1
     };
 
+    // Only force barrier edge offset if the requested coordinates are actually close
+    // to the barrier (e.g. edge-sliding crossover). For jumps and center restores,
+    // preserve the actual target coordinate so the cursor is not stuck at the edge.
+    bool isNearBarrier = false;
     using enum BarrierSide;
+    const auto threshold = (jumpZoneSize > 0) ? (jumpZoneSize * 4) : 50;
     switch (releaseBarrier.side) {
     case Left:
-      mappedX = std::min(releaseBounds.left + jumpZoneSize, releaseBounds.right);
-      mappedY = std::clamp(mappedY, releaseBounds.top, releaseBounds.bottom);
+      isNearBarrier = std::abs(mappedX - releaseBounds.left) <= threshold;
       break;
     case Right:
-      mappedX = std::max(releaseBounds.right - jumpZoneSize, releaseBounds.left);
-      mappedY = std::clamp(mappedY, releaseBounds.top, releaseBounds.bottom);
+      isNearBarrier = std::abs(mappedX - releaseBounds.right) <= threshold;
       break;
     case Top:
-      mappedX = std::clamp(mappedX, releaseBounds.left, releaseBounds.right);
-      mappedY = std::min(releaseBounds.top + jumpZoneSize, releaseBounds.bottom);
+      isNearBarrier = std::abs(mappedY - releaseBounds.top) <= threshold;
       break;
     case Bottom:
-      mappedX = std::clamp(mappedX, releaseBounds.left, releaseBounds.right);
-      mappedY = std::max(releaseBounds.bottom - jumpZoneSize, releaseBounds.top);
+      isNearBarrier = std::abs(mappedY - releaseBounds.bottom) <= threshold;
       break;
+    }
+
+    if (isNearBarrier) {
+      switch (releaseBarrier.side) {
+      case Left:
+        mappedX = std::min(releaseBounds.left + jumpZoneSize, releaseBounds.right);
+        mappedY = std::clamp(mappedY, releaseBounds.top, releaseBounds.bottom);
+        break;
+      case Right:
+        mappedX = std::max(releaseBounds.right - jumpZoneSize, releaseBounds.left);
+        mappedY = std::clamp(mappedY, releaseBounds.top, releaseBounds.bottom);
+        break;
+      case Top:
+        mappedX = std::clamp(mappedX, releaseBounds.left, releaseBounds.right);
+        mappedY = std::min(releaseBounds.top + jumpZoneSize, releaseBounds.bottom);
+        break;
+      case Bottom:
+        mappedX = std::clamp(mappedX, releaseBounds.left, releaseBounds.right);
+        mappedY = std::max(releaseBounds.bottom - jumpZoneSize, releaseBounds.top);
+        break;
+      }
+    } else {
+      mappedX = std::clamp(mappedX, computerLeft, computerRight);
+      mappedY = std::clamp(mappedY, computerTop, computerBottom);
     }
   }
 
@@ -666,6 +691,10 @@ void PortalInputCapture::release()
 
 void PortalInputCapture::release(double x, double y)
 {
+  if (!m_session || !m_isActive) {
+    LOG_DEBUG("skipping release, session inactive or null");
+    return;
+  }
   const auto [mappedX, mappedY] = mapPortalReleasePosition(x, y);
   LOG_DEBUG(
       "releasing input capture session, id=%d x=%.1f y=%.1f mapped=%.1f,%.1f", m_activationId, x, y, mappedX, mappedY
