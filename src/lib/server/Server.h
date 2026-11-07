@@ -322,6 +322,9 @@ private:
   void handleMotionSecondaryEvent(const Event &event);
   void handleWheelEvent(const Event &event);
   void handleSwitchWaitTimeout();
+  void handleFocusPulse();
+  void startFocusPulse(BaseClientProxy *target, int32_t x, int32_t y);
+  void stopFocusPulse();
   void handleClientDisconnected(BaseClientProxy *client);
   void handleClientCloseTimeout(BaseClientProxy *client);
   void handleSwitchToComputerEvent(const Event &event);
@@ -397,6 +400,12 @@ private:
   BaseClientProxy *m_switchComputer = nullptr;
   double m_switchWaitDelay = 0.0;
   EventQueueTimer *m_switchWaitTimer = nullptr;
+
+  EventQueueTimer *m_focusPulseTimer = nullptr;
+  int m_focusPulseStep = 0;
+  int32_t m_focusPulseTargetX = 0;
+  int32_t m_focusPulseTargetY = 0;
+  BaseClientProxy *m_focusPulseClient = nullptr;
 
   // delay for double-tap computer switching
   double m_switchTwoTapDelay = 0.0;

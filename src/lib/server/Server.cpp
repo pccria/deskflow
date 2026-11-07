@@ -521,12 +521,12 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
     // enter new computer
     m_active->enter(x, y, m_seqNum, m_primaryClient->getToggleMask(), forScreensaver);
 
-    // Focus activation: deliver a micro-motion pulse so the target client's window manager
-    // immediately activates hover and focus-follows-mouse on the node under cursor
+    // Focus activation pulse: deliver a delayed motion pulse over TCP after cutover
+    // so the secondary client's window manager receives genuine MotionNotify events
+    // and immediately activates the focus node / hover node under cursor.
+    stopFocusPulse();
     if (m_active != m_primaryClient) {
-      int32_t nudgeX = (x > dx + 2) ? (x - 2) : (x + 2);
-      m_active->mouseMove(nudgeX, y);
-      m_active->mouseMove(x, y);
+      startFocusPulse(m_active, x, y);
     }
 
     if (m_enableClipboard) {
@@ -927,6 +927,7 @@ void Server::noSwitch(int32_t x, int32_t y)
 
 void Server::stopSwitch()
 {
+  stopFocusPulse();
   if (m_switchComputer != nullptr) {
     m_switchComputer = nullptr;
     m_switchDir = Direction::NoDirection;
@@ -1023,6 +1024,88 @@ void Server::stopSwitchWait()
   if (m_switchWaitTimer != nullptr) {
     m_events->deleteTimer(m_switchWaitTimer);
     m_switchWaitTimer = nullptr;
+  }
+}
+
+void Server::startFocusPulse(BaseClientProxy *target, int32_t x, int32_t y)
+{
+  stopFocusPulse();
+  m_focusPulseClient = target;
+  m_focusPulseTargetX = x;
+  m_focusPulseTargetY = y;
+  m_focusPulseStep = 1;
+
+  LOG_INFO("initiating focus activation pulse for \"%s\" at %d,%d", getName(target).c_str(), x, y);
+
+  // 40ms delay gives client window manager time to process enter() and cursor warp
+  m_focusPulseTimer = m_events->newOneShotTimer(0.04, nullptr);
+  m_events->addHandler(EventTypes::Timer, m_focusPulseTimer, [this](const auto &) {
+    handleFocusPulse();
+  });
+}
+
+void Server::stopFocusPulse()
+{
+  if (m_focusPulseTimer != nullptr) {
+    m_events->removeHandler(EventTypes::Timer, m_focusPulseTimer);
+    m_events->deleteTimer(m_focusPulseTimer);
+    m_focusPulseTimer = nullptr;
+  }
+  m_focusPulseClient = nullptr;
+  m_focusPulseStep = 0;
+}
+
+void Server::handleFocusPulse()
+{
+  if (m_focusPulseTimer == nullptr) {
+    return;
+  }
+  EventQueueTimer *expiredTimer = m_focusPulseTimer;
+  m_focusPulseTimer = nullptr;
+  m_events->removeHandler(EventTypes::Timer, expiredTimer);
+  m_events->deleteTimer(expiredTimer);
+
+  if (m_active != m_focusPulseClient || m_active == nullptr || m_active == m_primaryClient) {
+    stopFocusPulse();
+    return;
+  }
+
+  int32_t sx = 0, sy = 0, sw = 1920, sh = 1080;
+  m_active->getShape(sx, sy, sw, sh);
+  if (sw <= 0) sw = 1920;
+
+  // 16px pulse offset (left if near right screen edge, else right)
+  int32_t offset = (m_focusPulseTargetX > sx + sw - 40) ? -16 : 16;
+
+  switch (m_focusPulseStep) {
+  case 1: {
+    // Step 1 (+40ms): send displacement (+16px) to break toolkit deadband and trigger MotionNotify / EnterNotify
+    int32_t nx = m_focusPulseTargetX + offset;
+    m_x = nx;
+    m_y = m_focusPulseTargetY;
+    m_active->mouseMove(m_x, m_y);
+    LOG_INFO("focus activation pulse step 1 on \"%s\" at %d,%d", getName(m_active).c_str(), m_x, m_y);
+
+    m_focusPulseStep = 2;
+    m_focusPulseTimer = m_events->newOneShotTimer(0.03, nullptr);
+    m_events->addHandler(EventTypes::Timer, m_focusPulseTimer, [this](const auto &) {
+      handleFocusPulse();
+    });
+    break;
+  }
+  case 2: {
+    // Step 2 (+70ms): return to target location (x, y)
+    m_x = m_focusPulseTargetX;
+    m_y = m_focusPulseTargetY;
+    m_active->mouseMove(m_x, m_y);
+    LOG_INFO("focus activation pulse step 2 (restore) on \"%s\" at %d,%d", getName(m_active).c_str(), m_x, m_y);
+
+    stopFocusPulse();
+    break;
+  }
+  default:
+    stopFocusPulse();
+    break;
   }
 }
 
@@ -1344,6 +1427,9 @@ void Server::handleSwitchWaitTimeout()
 
 void Server::handleClientDisconnected(BaseClientProxy *client)
 {
+  if (m_focusPulseClient == client) {
+    stopFocusPulse();
+  }
   // client has disconnected.  it might be an old client or an
   // active client.  we don't care so just handle it both ways.
   removeActiveClient(client);
